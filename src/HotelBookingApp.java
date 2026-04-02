@@ -1,97 +1,121 @@
 /**
  * Book My Stay Application
- * Use Case 5: Booking Request (First-Come-First-Served)
+ * Use Case 9: Error Handling & Validation
  *
- * Demonstrates Queue (FIFO) for fair booking request handling.
+ * Demonstrates input validation, custom exceptions,
+ * and safe system behavior.
  *
  * @author YourName
- * @version 5.0
+ * @version 9.0
  */
 
 import java.util.*;
 
-// ABSTRACT ROOM CLASS
-abstract class Room {
-    String type;
-    int beds;
-    double price;
-
-    Room(String type, int beds, double price) {
-        this.type = type;
-        this.beds = beds;
-        this.price = price;
-    }
-
-    void displayDetails() {
-        System.out.println(type + " | Beds: " + beds + " | Price: ₹" + price);
+// 🔥 CUSTOM EXCEPTION
+class InvalidBookingException extends Exception {
+    InvalidBookingException(String message) {
+        super(message);
     }
 }
 
-// ROOM TYPES
+// ROOM CLASS
+abstract class Room {
+    String type;
+
+    Room(String type) {
+        this.type = type;
+    }
+}
+
 class SingleRoom extends Room {
-    SingleRoom() { super("Single Room", 1, 1000); }
+    SingleRoom() { super("Single Room"); }
 }
 
 class DoubleRoom extends Room {
-    DoubleRoom() { super("Double Room", 2, 2000); }
+    DoubleRoom() { super("Double Room"); }
 }
 
 class SuiteRoom extends Room {
-    SuiteRoom() { super("Suite Room", 3, 5000); }
+    SuiteRoom() { super("Suite Room"); }
 }
 
-// INVENTORY (READ ONLY FOR NOW)
+// INVENTORY
 class RoomInventory {
-    private HashMap<String, Integer> inventory;
+
+    private HashMap<String, Integer> inventory = new HashMap<>();
 
     RoomInventory() {
-        inventory = new HashMap<>();
-        inventory.put("Single Room", 5);
-        inventory.put("Double Room", 2);
-        inventory.put("Suite Room", 1);
+        inventory.put("Single Room", 1);
+        inventory.put("Double Room", 1);
+        inventory.put("Suite Room", 0);
     }
 
     int getAvailability(String type) {
-        return inventory.getOrDefault(type, 0);
+        return inventory.getOrDefault(type, -1);
+    }
+
+    void reduceAvailability(String type) throws InvalidBookingException {
+
+        int available = getAvailability(type);
+
+        if (available <= 0) {
+            throw new InvalidBookingException("No rooms available for " + type);
+        }
+
+        inventory.put(type, available - 1);
     }
 }
 
-// 🔥 NEW CLASS — RESERVATION
+// RESERVATION
 class Reservation {
     String guestName;
     String roomType;
+    String id;
 
-    Reservation(String guestName, String roomType) {
+    Reservation(String guestName, String roomType, String id) {
         this.guestName = guestName;
         this.roomType = roomType;
-    }
-
-    void display() {
-        System.out.println("Guest: " + guestName + " | Requested: " + roomType);
+        this.id = id;
     }
 }
 
-// 🔥 NEW CLASS — BOOKING QUEUE (FIFO)
-class BookingQueue {
+// 🔥 VALIDATOR
+class BookingValidator {
 
-    private Queue<Reservation> queue;
+    static void validate(String guest, String roomType, RoomInventory inventory)
+            throws InvalidBookingException {
 
-    BookingQueue() {
-        queue = new LinkedList<>();
-    }
-
-    // Add request
-    void addRequest(Reservation r) {
-        queue.add(r);
-        System.out.println("Request added for " + r.guestName);
-    }
-
-    // Show all requests
-    void showQueue() {
-        System.out.println("\n---- Booking Requests (FIFO Order) ----");
-        for (Reservation r : queue) {
-            r.display();
+        if (guest == null || guest.isEmpty()) {
+            throw new InvalidBookingException("Guest name cannot be empty");
         }
+
+        if (inventory.getAvailability(roomType) == -1) {
+            throw new InvalidBookingException("Invalid room type: " + roomType);
+        }
+
+        if (inventory.getAvailability(roomType) == 0) {
+            throw new InvalidBookingException("Room not available: " + roomType);
+        }
+    }
+}
+
+// BOOKING SERVICE
+class BookingService {
+
+    private int counter = 1;
+
+    Reservation bookRoom(String guest, String type, RoomInventory inventory)
+            throws InvalidBookingException {
+
+        // 🔥 VALIDATE FIRST (FAIL FAST)
+        BookingValidator.validate(guest, type, inventory);
+
+        // ALLOCATE
+        String id = "RES" + counter++;
+        inventory.reduceAvailability(type);
+
+        System.out.println("Booking Confirmed: " + id);
+        return new Reservation(guest, type, id);
     }
 }
 
@@ -101,23 +125,27 @@ public class HotelBookingApp {
     public static void main(String[] args) {
 
         System.out.println("===== Book My Stay App =====");
-        System.out.println("Version: 5.0\n");
+        System.out.println("Version: 9.0\n");
 
-        // INVENTORY (only for reference)
         RoomInventory inventory = new RoomInventory();
+        BookingService service = new BookingService();
 
-        // BOOKING QUEUE
-        BookingQueue bookingQueue = new BookingQueue();
+        try {
+            // VALID BOOKING
+            service.bookRoom("Akshay", "Single Room", inventory);
 
-        // 🔥 SIMULATE REQUESTS (FIRST COME FIRST SERVED)
-        bookingQueue.addRequest(new Reservation("Akshay", "Single Room"));
-        bookingQueue.addRequest(new Reservation("Ravi", "Double Room"));
-        bookingQueue.addRequest(new Reservation("Priya", "Suite Room"));
-        bookingQueue.addRequest(new Reservation("Kiran", "Single Room"));
+            // INVALID ROOM TYPE
+            service.bookRoom("Ravi", "Luxury Room", inventory);
 
-        // DISPLAY QUEUE
-        bookingQueue.showQueue();
+            // NO AVAILABILITY
+            service.bookRoom("Priya", "Suite Room", inventory);
 
-        System.out.println("\nNote: No rooms allocated yet (only requests stored).");
+        } catch (InvalidBookingException e) {
+
+            // 🔥 GRACEFUL ERROR HANDLING
+            System.out.println("Error: " + e.getMessage());
+        }
+
+        System.out.println("\nSystem continues running safely...");
     }
 }
